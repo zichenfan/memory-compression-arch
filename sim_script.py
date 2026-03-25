@@ -1,44 +1,90 @@
-import argparse
+import struct
 import random
 
-def simulate_decompression(temperature, chunk_size):
-    """
-    Simulate the decompression process based on data temperature and chunk size.
-    Returns: Compression Ratio, Decompression Latency (ns), Area Utilization
-    """
-    if temperature == "cold":
-        # Cold Data: Expect large chunks (e.g., 4KB) and complex algos (e.g., ZSTD)
-        if chunk_size < 1024:
-            ratio = random.uniform(1.2, 1.8) # Poor ratio on small blocks with complex algo overhead
-            latency = random.randint(150, 250)
-            area_util = "High (Unified Engine: Active)"
-        else:
-            ratio = random.uniform(2.5, 4.0) # High compression ratio
-            latency = random.randint(300, 500) # High latency
-            area_util = "High (Unified Engine: Active)"
-    else:
-        # Hot/Warm Data: Expect small chunks (e.g., 256B) and simple algos (e.g., FPC)
-        if chunk_size >= 1024:
-            ratio = random.uniform(1.1, 1.3) # Simple algos don't compress large blocks well
-            latency = random.randint(20, 50)
-            area_util = "Low (Unified Engine: Bypass)"
-        else:
-            ratio = random.uniform(1.3, 1.8) # Moderate compression ratio
-            latency = random.randint(2, 10)  # Extremely low latency
-            area_util = "Low (Unified Engine: Partial Power-down)"
+class FPC_Simulator:
+    """Simulates Frequent Pattern Compression (FPC) on 256B chunks."""
+    def compress(self, data: bytes):
+        assert len(data) == 256
+        words = [struct.unpack('<I', data[i:i+4])[0] for i in range(0, 256, 4)]
+        compressed_bits = 0
+        for w in words:
+            compressed_bits += 3  # 3-bit prefix overhead
+            if w == 0:
+                pass  # 000: Zero run (0 extra bits)
+            elif 0 <= w <= 0xFF:
+                compressed_bits += 8  # 001: 8-bit sign extended
+            elif 0 <= w <= 0xFFFF:
+                compressed_bits += 16 # 010: 16-bit sign extended
+            elif (w & 0xFFFF) == 0:
+                compressed_bits += 16 # 011: Half-word zero padded
+            else:
+                compressed_bits += 32 # 111: Uncompressed
+        return compressed_bits / 8.0
 
-    return ratio, latency, area_util
+class LZ_Simulator:
+    """Simulates LZ77 Dictionary Compression (Core of LZ4/ZSTD)."""
+    def compress(self, data: bytes, window_size: int):
+        compressed_size = 0
+        i = 0
+        n = len(data)
+        while i < n:
+            match_len = 0
+            start_window = max(0, i - window_size)
+            # Brute-force longest match search
+            for j in range(start_window, i):
+                length = 0
+                while i + length < n and data[j + length] == data[i + length] and length < 255:
+                    length += 1
+                if length > match_len:
+                    match_len = length
+            
+            if match_len >= 3:
+                compressed_size += 2 # (offset, length) encoding approx 2 bytes
+                i += match_len
+            else:
+                compressed_size += 1 # literal
+                i += 1
+        return compressed_size * 1.05 # Add 5% overhead for FSE/Huffman entropy metadata
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Simulate Unified Decompression Engine")
-    parser.add_argument("--temperature", choices=["hot", "cold"], required=True, help="Data temperature")
-    parser.add_argument("--chunk_size", type=int, required=True, help="Chunk size in bytes")
-    args = parser.parse_args()
+def generate_synthetic_data():
+    random.seed(42)
+    # 1. Pointer-heavy (Array of pointers, high locality, upper 16-bits identical)
+    base_ptr = 0x7FFF0000
+    pointers = b"".join(struct.pack('<I', base_ptr + random.randint(0, 20)*8) for _ in range(1024))
+    
+    # 2. Text-Heavy (Repeated patterns, good for LZ)
+    text_base = b"AdaptiveMemComp: Analyzing unified decompression datapath. " * 80
+    text = text_base[:4096]
+    
+    return {"Pointer-Heavy (Heap/Arrays)": pointers, "Text-Heavy (Pages/Strings)": text}
 
-    ratio, latency, area = simulate_decompression(args.temperature, args.chunk_size)
-    print(f"--- Simulation Results ---")
-    print(f"Data Temp : {args.temperature.capitalize()}")
-    print(f"Chunk Size: {args.chunk_size} Bytes")
-    print(f"Comp. Ratio: {ratio:.2f}x")
-    print(f"Latency   : {latency} ns")
-    print(f"Engine Area: {area}")
+def run_simulation():
+    datasets = generate_synthetic_data()
+    fpc = FPC_Simulator()
+    lz = LZ_Simulator()
+    
+    print("=== Step 2.1: Compression Ratio Simulation ===")
+    for name, data in datasets.items():
+        print(f"\nDataset: {name} (Size: 4KB)")
+        
+        # 1. 4KB Full LZ (ZSTD-like)
+        lz_4k_size = lz.compress(data, window_size=4096)
+        cr_4k = 4096 / lz_4k_size
+        print(f"  [Cold] 4KB Full LZ (ZSTD-like)  CR: {cr_4k:.2f}x")
+        
+        # 2. 256B Chunked Simulation
+        fpc_total_size = 0
+        lz_256_total_size = 0
+        for i in range(0, 4096, 256):
+            chunk = data[i:i+256]
+            fpc_total_size += fpc.compress(chunk)
+            lz_256_total_size += lz.compress(chunk, window_size=256)
+            
+        cr_fpc = 4096 / fpc_total_size
+        cr_lz256 = 4096 / lz_256_total_size
+        
+        print(f"  [Hot ] 256B FPC (Pattern)       CR: {cr_fpc:.2f}x")
+        print(f"  [Hot ] 256B Simplified LZ       CR: {cr_lz256:.2f}x")
+
+if __name__ == '__main__':
+    run_simulation()
