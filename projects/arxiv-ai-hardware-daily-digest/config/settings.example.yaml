@@ -1,0 +1,191 @@
+# Arxiv AI Hardware Daily Digest - 配置文件模板
+# 复制此文件为 settings.yaml 并填写实际配置
+
+arxiv:
+  # Arxiv API配置
+  base_url: "http://export.arxiv.org/api/query"
+  max_results: 100  # 每次查询最大结果数
+  days_back: 7      # 查询最近多少天的论文
+  
+  # 论文类别（Arxiv分类）
+  categories:
+    - cs.AR    # 硬件架构 (Computer Architecture)
+    - cs.AI    # 人工智能 (Artificial Intelligence)
+    - cs.LG    # 机器学习 (Machine Learning)
+    - cs.CV    # 计算机视觉 (Computer Vision)
+    - cs.CL    # 计算语言学 (Computation and Language)
+    - cs.NE    # 神经网络 (Neural and Evolutionary Computing)
+  
+  # 关键词配置
+  keywords:
+    hardware_acceleration:
+      - quantization
+      - sparsity
+      - "LLM hardware"
+      - "3D PIM"
+      - "AI accelerator"
+      - "neural processor"
+      - "in-memory computing"
+      - "processing-in-memory"
+      - "hardware architecture"
+      - "model compression"
+    
+    techniques:
+      - "model compression"
+      - "pruning"
+      - "knowledge distillation"
+      - "efficient inference"
+      - "low-precision"
+      - "mixed-precision"
+      - "sparse attention"
+      - "transformer optimization"
+    
+    applications:
+      - "large language model"
+      - "LLM inference"
+      - "edge AI"
+      - "mobile AI"
+      - "autonomous driving"
+      - "robotics"
+
+filter:
+  # 质量筛选阈值
+  quality_threshold: 0.7    # 质量分数阈值 (0-1)
+  min_papers_per_day: 5     # 每天最少论文数
+  max_papers_per_day: 15    # 每天最多论文数
+  
+  # 评分权重配置
+  scoring_weights:
+    keyword_match: 0.4      # 关键词匹配权重
+    author_reputation: 0.3  # 作者声誉权重
+    recency: 0.2            # 新鲜度权重
+    content_quality: 0.1    # 内容质量权重
+  
+  # 作者声誉配置（知名研究机构）
+  reputable_institutions:
+    - "MIT"
+    - "Stanford"
+    - "UC Berkeley"
+    - "CMU"
+    - "Google"
+    - "Microsoft"
+    - "Meta"
+    - "NVIDIA"
+    - "Intel"
+    - "AMD"
+  
+  # 知名会议和期刊
+  top_conferences:
+    - "ISCA"
+    - "MICRO"
+    - "HPCA"
+    - "ASPLOS"
+    - "NeurIPS"
+    - "ICML"
+    - "ICLR"
+    - "CVPR"
+    - "ACL"
+
+feishu:
+  # 飞书API配置（通过环境变量设置）
+  app_id: "${FEISHU_APP_ID}"        # 从环境变量读取
+  app_secret: "${FEISHU_APP_SECRET}" # 从环境变量读取
+  
+  # 文档配置
+  document_folder: "AI论文日报"      # 飞书文档文件夹名称
+  document_title: "AI硬件加速论文日报 - {date}"  # 文档标题模板
+  
+  # 文档模板配置
+  template:
+    overview:
+      title: "📊 今日概览"
+      content: |
+        今日共抓取 **{total_papers}** 篇论文，经过质量筛选后保留 **{filtered_papers}** 篇高质量论文。
+        
+        **统计信息**:
+        - 量化相关: {quantization_count}篇
+        - 稀疏相关: {sparsity_count}篇
+        - LLM硬件: {llm_hardware_count}篇
+        - 3D PIM: {pim_count}篇
+    
+    featured:
+      title: "🏆 今日精选"
+      paper_template: |
+        ### {title}
+        
+        **作者**: {authors}
+        
+        **摘要**: {abstract_summary}
+        
+        **关键点**:
+        {key_points}
+        
+        **原文链接**: [Arxiv]({pdf_url})
+        
+        **标签**: {tags}
+    
+    categories:
+      title: "📁 分类汇总"
+      category_template: |
+        #### {category_name} ({paper_count}篇)
+        {paper_list}
+
+schedule:
+  # 执行时间配置 (UTC时间)
+  cron: "0 8 * * *"  # 每天8点执行
+  timezone: "Asia/Shanghai"
+  
+  # 通知配置
+  notifications:
+    enabled: true
+    on_success: true    # 成功时发送通知
+    on_failure: true    # 失败时发送通知
+    channel: "feishu"   # 通知渠道: feishu/email/slack
+    
+    # 飞书通知配置
+    feishu:
+      webhook_url: "${FEISHU_WEBHOOK_URL}"  # 飞书群机器人webhook
+      at_users: []  # @的用户列表，如 ["ou_xxx"]
+
+logging:
+  # 日志配置
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "json"  # json/text
+  file: "logs/arxiv_digest.log"
+  
+  # 日志轮转
+  rotation:
+    enabled: true
+    max_size: "10MB"    # 单个日志文件最大大小
+    backup_count: 7     # 保留的日志文件数量
+
+monitoring:
+  # 监控配置
+  enabled: true
+  metrics_port: 9090    # Prometheus metrics端口
+  
+  # 告警配置
+  alerts:
+    - name: "execution_failed"
+      condition: "execution_status != 'success'"
+      severity: "critical"
+    
+    - name: "low_paper_count"
+      condition: "filtered_papers < 3"
+      severity: "warning"
+    
+    - name: "high_error_rate"
+      condition: "error_rate > 0.1"
+      severity: "warning"
+
+cache:
+  # 缓存配置（避免重复处理）
+  enabled: true
+  ttl: 86400  # 缓存有效期（秒），24小时
+  path: "cache/processed_papers.json"
+
+# 开发调试配置
+debug:
+  enabled: false
+  dry_run: false  # 干跑模式，不实际创建文档
+  test_date: null  # 测试指定日期，如 "2024-01-01"
